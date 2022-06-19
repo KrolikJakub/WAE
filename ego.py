@@ -119,7 +119,6 @@ for batch_counter, problem in enumerate(suite):  # this loop may take hours or d
 
         search_space = Box([-100, -100], [100, 100])
         OBJECTIVE = "OBJECTIVE"
-        FAILURE = "FAILURE"
 
 
         def observer_xd(x):
@@ -129,8 +128,7 @@ for batch_counter, problem in enumerate(suite):  # this loop may take hours or d
             y = np.array(results)
             mask = np.isfinite(y).reshape(-1)
             return {
-                OBJECTIVE: trieste.data.Dataset(x[mask], y[mask]),
-                FAILURE: trieste.data.Dataset(x, tf.cast(np.isfinite(y), tf.float64)),
+                OBJECTIVE: trieste.data.Dataset(x[mask], y[mask])
             }
 
 
@@ -140,17 +138,9 @@ for batch_counter, problem in enumerate(suite):  # this loop may take hours or d
         regression_model = build_gpr(
             initial_data[OBJECTIVE], search_space, likelihood_variance=1e-7
         )
-        classification_model = build_vgp_classifier(
-            initial_data[FAILURE], search_space, noise_free=True
-        )
 
         models: dict[str, TrainableProbabilisticModel] = {
             OBJECTIVE: GaussianProcessRegression(regression_model),
-            FAILURE: VariationalGaussianProcess(
-                classification_model,
-                BatchOptimizer(tf.optimizers.Adam(1e-3)),
-                use_natgrads=True,
-            ),
         }
 
 
@@ -165,8 +155,7 @@ for batch_counter, problem in enumerate(suite):  # this loop may take hours or d
 
         ei = ExpectedImprovement()
         pov = ProbabilityOfValidity()
-        acq_fn = Product(ei.using(OBJECTIVE), pov.using(FAILURE))
-        rule = EfficientGlobalOptimization(acq_fn)  # type: ignore
+        rule = EfficientGlobalOptimization(ei.using(OBJECTIVE))  # type: ignore
 
         bo = trieste.bayesian_optimizer.BayesianOptimizer(observer_xd, search_space)
 
